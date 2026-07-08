@@ -1,0 +1,11 @@
+classdef TstCfg
+    %TSTCFG Summary of this class goes here
+    %   Detailed explanation goes here
+
+    properties (Constant)
+        stabilityB
+        disturbanceSteps = [550, 600];
+        disturbanceForceXYZ = [3, 0, 0];
+        disturbanceTorqueABG = [0, 0, 0];
+    end
+end
