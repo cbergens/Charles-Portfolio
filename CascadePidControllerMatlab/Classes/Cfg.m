@@ -14,11 +14,13 @@ classdef Cfg
     properties (Constant)
 
         %% --- Environment / physical constants (fixed by the airframe + sim) ---
-        m   = 0.12;          % mass (kg)
-        g   = 9.81;          % gravity (m/s^2)
-        kF  = 0.01;          % rotor thrust coeff: F = kF * w^2  (N*s^2/rad^2)
-        iZ  = 1.6326e-03;    % yaw moment of inertia (kg*m^2), from sim shape props
-        kT  = 0.002;         % reaction torque coeff (N*m*s^2/rad^2), from Lua script
+        m   = 0.12;         % mass (kg)
+        g   = 9.81;         % gravity (m/s^2)
+        kF  = 0.01;         % rotor thrust coeff: F = kF * w^2  (N*s^2/rad^2)
+        iX  = 1.6326e-03;   % roll moment of inertia 
+        iY  = 1.6326e-03;   % pitch moment of inertia
+        iZ  = 3.1693e-03;   % yaw moment of inertia (kg*m^2), from sim shape props
+        kT  = 0.002;        % reaction torque coeff (N*m*s^2/rad^2), from Lua script
         L_X_Pos = 0.0919;   % front arm (-> pitch column
         L_X_Neg = 0.0919;   % back arm
         L_Y_Pos = 0.0919;   % left/right arm (-> roll column)
@@ -64,25 +66,25 @@ classdef Cfg
         % --- X position PID (outer loop: position error -> desired pitch) ---
         posX_P_Gain = 0.7;
         posX_I_Gain = 0.02;
-        posX_D_Gain = 2.3;
+        posX_D_Gain = 3.3;
 
         % --- Y position PID (outer loop: position error -> desired roll) ---
         posY_P_Gain = 0.7;
         posY_I_Gain = 0.02;
-        posY_D_Gain = 2.3;
+        posY_D_Gain = 3.3;
 
         % --- Z position PID (altitude hold with gravity feedforward) ---
         posZ_P_Gain = 0.5;
-        posZ_I_Gain = 0.01;
+        posZ_I_Gain = 0.02;
         posZ_D_Gain = 0.7;
         clampZ      = 5;     % integral clamp (m*s) — prevents takeoff windup
 
         % --- Attitude PD (inner loop: angle error + rate damping -> torque) ---
-        attAngle_P_Gain = 0.05;
-        attAngle_D_Gain = 0.01;
+        attAngle_P_Gain = 49;
+        attAngle_D_Gain = 14;
 
         % --- Yaw rate control (regulate yaw rate to zero) ---
-        yaw_P_Gain = 5.85;
+        yaw_P_Gain = 4.85;
         yaw_D_Gain = 5.85;
         
         % --- Derived integral clamps -------------------------------------------

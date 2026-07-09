@@ -53,6 +53,8 @@ if (retStatus == 0)
     m   = Cfg.m;
     g   = Cfg.g;
     kF  = Cfg.kF;
+    iX  = Cfg.iX;
+    iY  = Cfg.iY;
     iZ  = Cfg.iZ;
     kT  = Cfg.kT;
     mixer = Cfg.mixer;
@@ -113,9 +115,9 @@ if (retStatus == 0)
     attAngle_D_Gain = Cfg.attAngle_D_Gain;
 
     % Yaw rate control — regulate yaw rate to zero (heading-hold via rate damping)
-    yaw_D_Gain = Cfg.yaw_D_Gain;
     yaw_P_Gain = Cfg.yaw_P_Gain;
-
+    yaw_D_Gain = Cfg.yaw_D_Gain;
+    
     % Integral clamps — derived in Cfg as maxWindAngle / I_Gain
     clampX = Cfg.clampX;   % = 15
     clampY = Cfg.clampY;   % = 15
@@ -131,6 +133,7 @@ if (retStatus == 0)
     posX_Integral  = zeros(1, trialSteps);
     posY_Integral  = zeros(1, trialSteps);
     posZ_Integral  = zeros(1, trialSteps);
+    yaw_Integral   = zeros(1, trialSteps);
     accelX_Desired = zeros(1, trialSteps);
     accelY_Desired = zeros(1, trialSteps);
     pitch_Desired  = zeros(1, trialSteps);
@@ -192,6 +195,10 @@ if (retStatus == 0)
         posX_D_Error_Body = (posX_D_Error * cos(yaw(step))) + (posY_D_Error * sin(yaw(step)));
         posY_D_Error_Body = - (posX_D_Error * sin(yaw(step))) + (posY_D_Error * cos(yaw(step)));
 
+        % Yaw rate error — drive yaw rate to the setpoint (0)
+        yaw_D_Error = yaw_D_Desired - yaw_D;
+        yaw_Error = yaw_Desired - yaw(step);
+
         % Integral errors — Riemann sum with dt == delta, clamped to prevent windup
         if (step == 1)
             posX_Integral(step) = posX_Error_Body * delta;
@@ -207,25 +214,21 @@ if (retStatus == 0)
         posY_Integral(step) = max(-clampY, min(clampY, posY_Integral(step)));
         posZ_Integral(step) = max(-clampZ, min(clampZ, posZ_Integral(step)));
 
-        % Yaw rate error — drive yaw rate to the setpoint (0)
-        yaw_D_Error = yaw_D_Desired - yaw_D;
-        yaw_Error = yaw_Desired - yaw(step);
-
         % Z controller — PID + gravity feedforward
         uZ = posZ_P_Gain * posZ_Error + ...
-            posZ_I_Gain * posZ_Integral(step) + ...
-            posZ_D_Gain * posZ_D_Error + ...
-            (m * g) / (cos(roll(step)) * cos(pitch(step)));
+             posZ_I_Gain * posZ_Integral(step) + ...
+             posZ_D_Gain * posZ_D_Error + ...
+             (m * g) / (cos(roll(step)) * cos(pitch(step)));
 
         % Outer loop — position error -> desired acceleration -> desired tilt angle
         % Physics: tan(theta) = a/g -> theta = atan(a/g)
         accelX_Desired(step) = posX_P_Gain * posX_Error_Body + ...
-            posX_I_Gain * posX_Integral(step) + ...
-            posX_D_Gain * posX_D_Error_Body;
+                               posX_I_Gain * posX_Integral(step) + ...
+                               posX_D_Gain * posX_D_Error_Body;
 
         accelY_Desired(step) = posY_P_Gain * posY_Error_Body + ...
-            posY_I_Gain * posY_Integral(step) + ...
-            posY_D_Gain * posY_D_Error_Body;
+                               posY_I_Gain * posY_Integral(step) + ...
+                               posY_D_Gain * posY_D_Error_Body;
 
         pitch_Desired(step) =  atan2(accelX_Desired(step), g);
         roll_Desired(step)  = -atan2(accelY_Desired(step), g);
@@ -239,17 +242,17 @@ if (retStatus == 0)
         roll_D2_Des = (roll_Error  * attAngle_P_Gain) + (roll_D_Error  * attAngle_D_Gain);
         pitch_D2_Des = (pitch_Error * attAngle_P_Gain) + (pitch_D_Error * attAngle_D_Gain);
         
-        uWx = iX * roll_D2_Des;
-        uWy = iY * pitch_D2_Des;
+        tau_X = iX * roll_D2_Des;
+        tau_Y = iY * pitch_D2_Des;
 
         % Yaw rate controller — desired yaw angular acceleration -> rotor wSq differential
         yaw_D2_Des = (yaw_P_Gain * yaw_Error) + (yaw_D_Gain * yaw_D_Error);
-        uWz = iZ * yaw_D2_Des;
+        tau_Z = iZ * yaw_D2_Des;
 
         % Control allocation — maps ctrls -> individual rotor wSq
         % ctrls order: [tau_X (roll); tau_Y (pitch); uZ (thrust); uWz (yaw)]
-        
-        ctrls = [tau_X; tau_Y; uZ; uWz];
+
+        ctrls = [tau_X; tau_Y; uZ; tau_Z];
         wSq = mixer * ctrls;
 
         %% Log Data
