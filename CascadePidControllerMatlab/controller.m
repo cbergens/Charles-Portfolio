@@ -187,26 +187,18 @@ if (retStatus == 0)
         posY_D_Error = velY_Desired - quadVel(1, 2);
         posZ_D_Error = velZ_Desired - quadVel(1, 3);
 
-        %% Rotate X and Y errors into the body frame to account for heading.
-        %  With yaw-rate control the heading stays near 0, so this is ~identity,
-        %  but keeping it makes the controller correct for any heading.
-        posX_Error_Body =   (posX_Error * cos(yaw(step))) + (posY_Error * sin(yaw(step)));
-        posY_Error_Body = - (posX_Error * sin(yaw(step))) + (posY_Error * cos(yaw(step)));
-        posX_D_Error_Body = (posX_D_Error * cos(yaw(step))) + (posY_D_Error * sin(yaw(step)));
-        posY_D_Error_Body = - (posX_D_Error * sin(yaw(step))) + (posY_D_Error * cos(yaw(step)));
-
         % Yaw rate error — drive yaw rate to the setpoint (0)
         yaw_D_Error = yaw_D_Desired - yaw_D;
-        yaw_Error = yaw_Desired - yaw(step);
+        yaw_Error = atan2(sin(yaw_Desired - yaw(step)), cos(yaw_Desired - yaw(step)));
 
         % Integral errors — Riemann sum with dt == delta, clamped to prevent windup
         if (step == 1)
-            posX_Integral(step) = posX_Error_Body * delta;
-            posY_Integral(step) = posY_Error_Body * delta;
+            posX_Integral(step) = posX_Error * delta;
+            posY_Integral(step) = posY_Error * delta;
             posZ_Integral(step) = posZ_Error * delta;
         else
-            posX_Integral(step) = posX_Integral(step - 1) + posX_Error_Body * delta;
-            posY_Integral(step) = posY_Integral(step - 1) + posY_Error_Body * delta;
+            posX_Integral(step) = posX_Integral(step - 1) + posX_Error * delta;
+            posY_Integral(step) = posY_Integral(step - 1) + posY_Error * delta;
             posZ_Integral(step) = posZ_Integral(step - 1) + posZ_Error * delta;
         end
 
@@ -222,13 +214,13 @@ if (retStatus == 0)
 
         % Outer loop — position error -> desired acceleration -> desired tilt angle
         % Physics: tan(theta) = a/g -> theta = atan(a/g)
-        accelX_Desired(step) = posX_P_Gain * posX_Error_Body + ...
+        accelX_Desired(step) = posX_P_Gain * posX_Error + ...
                                posX_I_Gain * posX_Integral(step) + ...
-                               posX_D_Gain * posX_D_Error_Body;
+                               posX_D_Gain * posX_D_Error;
 
-        accelY_Desired(step) = posY_P_Gain * posY_Error_Body + ...
+        accelY_Desired(step) = posY_P_Gain * posY_Error + ...
                                posY_I_Gain * posY_Integral(step) + ...
-                               posY_D_Gain * posY_D_Error_Body;
+                               posY_D_Gain * posY_D_Error;
 
         pitch_Desired(step) =  atan2(accelX_Desired(step), g);
         roll_Desired(step)  = -atan2(accelY_Desired(step), g);
@@ -245,6 +237,9 @@ if (retStatus == 0)
         tau_X = iX * roll_D2_Des;
         tau_Y = iY * pitch_D2_Des;
 
+        tau_X_Body = cos(yaw(step)) * tau_X + sin(yaw(step)) * tau_Y;
+        tau_Y_Body = -sin(yaw(step)) * tau_X + cos(yaw(step)) * tau_Y;
+
         % Yaw rate controller — desired yaw angular acceleration -> rotor wSq differential
         yaw_D2_Des = (yaw_P_Gain * yaw_Error) + (yaw_D_Gain * yaw_D_Error);
         tau_Z = iZ * yaw_D2_Des;
@@ -252,7 +247,7 @@ if (retStatus == 0)
         % Control allocation — maps ctrls -> individual rotor wSq
         % ctrls order: [tau_X (roll); tau_Y (pitch); uZ (thrust); uWz (yaw)]
 
-        ctrls = [tau_X; tau_Y; uZ; tau_Z];
+        ctrls = [tau_X_Body; tau_Y_Body; uZ; tau_Z];
         wSq = mixer * ctrls;
 
         %% Log Data
@@ -314,7 +309,7 @@ if (retStatus == 0)
     plot(t, roll, 'b', t, roll_Desired, 'r--');
     ylabel('rad'); title('Roll'); legend('Actual','Desired'); grid on;
     subplot(3,1,3);
-    plot(t, yaw, 'b', t, zeros(1,trialSteps), 'r--');
+    plot(t, yaw, 'b', t, yaw_Desired * ones(1, trialSteps), 'r--');
     xlabel('Time (s)'); ylabel('rad'); title('Yaw Angle (held steady by rate control)'); legend('Actual','Setpoint'); grid on;
     sgtitle('Attitude');
 
